@@ -10,12 +10,16 @@ class RadarDisplay {
         this.networks = new Map();
         this.isScanning = false;
         this.updateInterval = null;
+        this.fixtureMode = new URLSearchParams(window.location.search).get('fixture') === 'stress';
 
         this.init();
     }
 
     init() {
         this.setupEventListeners();
+        if (this.fixtureMode) {
+            this.loadStressFixture();
+        }
         this.startAutoUpdate();
         this.updateStatistics();
     }
@@ -35,6 +39,15 @@ class RadarDisplay {
         };
     }
 
+    async fetchV1(path, options) {
+        const response = await fetch(path, options);
+        const payload = await response.json();
+        if (!response.ok || payload.ok === false) {
+            throw new Error(payload?.error?.message || `Request failed: ${response.status}`);
+        }
+        return payload.data;
+    }
+
     async toggleScan() {
         if (this.isScanning) {
             await this.stopScan();
@@ -45,9 +58,7 @@ class RadarDisplay {
 
     async startScan() {
         try {
-            const response = await fetch('/api/scan/start');
-            const data = await response.json();
-
+            const data = await this.fetchV1('/api/v1/scan/start', { method: 'POST' });
             if (data.status === 'scan_started') {
                 this.isScanning = true;
                 this.scanButton.innerHTML = '<span class="status-indicator"></span>Stop Scan';
@@ -62,9 +73,7 @@ class RadarDisplay {
 
     async stopScan() {
         try {
-            const response = await fetch('/api/scan/stop');
-            const data = await response.json();
-
+            const data = await this.fetchV1('/api/v1/scan/stop', { method: 'POST' });
             if (data.status === 'scan_stopped') {
                 this.isScanning = false;
                 this.scanButton.innerHTML = '<span class="status-indicator"></span>Start Scan';
@@ -79,20 +88,8 @@ class RadarDisplay {
 
     async exportData() {
         try {
-            const response = await fetch('/api/export/json');
-            if (!response.ok) {
-                this.updateStatus('Export failed');
-                return;
-            }
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `radar_export_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            const data = await this.fetchV1('/api/v1/export/json');
+            window.location.href = data.download_path;
             this.updateStatus('Data exported');
         } catch (error) {
             this.updateStatus('Export failed');
@@ -118,17 +115,19 @@ class RadarDisplay {
     }
 
     async updateSignals() {
-        try {
-            const response = await fetch('/api/signals');
-            const data = await response.json();
+        if (this.fixtureMode) {
+            return;
+        }
 
+        try {
+            const data = await this.fetchV1('/api/v1/signals');
             if (!data.signals) {
                 return;
             }
             data.signals.forEach((signal) => this.networks.set(signal.bssid, signal));
             this.updateRadarDisplay();
             this.updateNetworkList();
-            this.updateLastUpdate(data.timestamp);
+            this.updateLastUpdate(new Date().toISOString());
         } catch (error) {
             console.error(error);
         }
@@ -170,7 +169,7 @@ class RadarDisplay {
             <div><strong>${network.ssid || 'Hidden'}</strong></div>
             <div>${network.bssid}</div>
             <div>Signal: ${network.level} dBm</div>
-            <div>Distance: ${network.distance.toFixed(1)}m</div>
+            <div>Distance: ${Number(network.distance || 0).toFixed(1)}m</div>
             <div>Risk: ${network.risk_score}/100</div>
             <div>Security: ${network.capabilities || 'Unknown'}</div>
             <div>Frequency: ${network.frequency} MHz</div>
@@ -203,9 +202,17 @@ class RadarDisplay {
     }
 
     async updateStatistics() {
+        if (this.fixtureMode) {
+            document.getElementById('totalNetworks').textContent = this.networks.size;
+            document.getElementById('activeNetworks').textContent = this.networks.size;
+            document.getElementById('highRiskNetworks').textContent = Array.from(this.networks.values()).filter((n) => n.risk_score > 50).length;
+            document.getElementById('openNetworks').textContent = Array.from(this.networks.values()).filter((n) => n.is_open).length;
+            document.getElementById('hiddenNetworks').textContent = Array.from(this.networks.values()).filter((n) => n.is_hidden).length;
+            return;
+        }
+
         try {
-            const response = await fetch('/api/statistics');
-            const stats = await response.json();
+            const stats = await this.fetchV1('/api/v1/statistics');
             document.getElementById('totalNetworks').textContent = stats.total_networks || 0;
             document.getElementById('activeNetworks').textContent = stats.active_networks || 0;
             document.getElementById('highRiskNetworks').textContent = stats.high_risk_networks || 0;
@@ -223,6 +230,35 @@ class RadarDisplay {
     updateLastUpdate(timestamp) {
         if (!timestamp) return;
         document.getElementById('lastUpdate').textContent = new Date(timestamp).toLocaleTimeString();
+    }
+
+    loadStressFixture() {
+        const levels = [-32, -44, -58, -67, -78, -85];
+        for (let i = 0; i < 70; i += 1) {
+            const bssid = `AA:BB:CC:${String(i).padStart(2, '0')}:DD:EE`;
+            const level = levels[i % levels.length];
+            const risk = (i * 7) % 100;
+            this.networks.set(bssid, {
+                bssid,
+                ssid: `Very-Long-SSID-For-Stress-Validation-Network-${i.toString().padStart(3, '0')}`,
+                level,
+                distance: Math.max(1, Math.abs(level) / 2),
+                risk_score: risk,
+                is_hidden: i % 9 === 0,
+                is_open: i % 5 === 0,
+                capabilities: i % 5 === 0 ? '[OPEN]' : '[WPA2-PSK-CCMP][ESS]',
+                frequency: i % 2 === 0 ? 2412 : 5180,
+                position: {
+                    x: Math.cos(i * 0.5) * ((i % 10) / 10),
+                    y: Math.sin(i * 0.5) * ((i % 10) / 10),
+                },
+            });
+        }
+
+        this.updateStatus('Fixture: stress mode');
+        this.updateRadarDisplay();
+        this.updateNetworkList();
+        this.updateLastUpdate(new Date().toISOString());
     }
 }
 
