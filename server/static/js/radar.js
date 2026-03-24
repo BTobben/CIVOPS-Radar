@@ -6,11 +6,13 @@ class RadarDisplay {
         this.scanButton = document.getElementById('scanButton');
         this.exportButton = document.getElementById('exportButton');
         this.clearButton = document.getElementById('clearButton');
+        this.networkSearch = document.getElementById('networkSearch');
 
         this.networks = new Map();
         this.isScanning = false;
         this.updateInterval = null;
         this.fixtureMode = new URLSearchParams(window.location.search).get('fixture') === 'stress';
+        this.searchQuery = '';
 
         this.init();
     }
@@ -28,6 +30,10 @@ class RadarDisplay {
         this.scanButton.addEventListener('click', () => this.toggleScan());
         this.exportButton.addEventListener('click', () => this.exportData());
         this.clearButton.addEventListener('click', () => this.clearData());
+        this.networkSearch.addEventListener('input', (event) => {
+            this.searchQuery = event.target.value.toLowerCase().trim();
+            this.updateNetworkList();
+        });
     }
 
     getRadarMetrics() {
@@ -181,7 +187,15 @@ class RadarDisplay {
     }
 
     updateNetworkList() {
-        const networks = Array.from(this.networks.values()).sort((a, b) => b.risk_score - a.risk_score);
+        const networks = Array.from(this.networks.values())
+            .filter((network) => {
+                if (!this.searchQuery) return true;
+                const ssid = (network.ssid || '').toLowerCase();
+                const bssid = (network.bssid || '').toLowerCase();
+                const vendor = (network.vendor || '').toLowerCase();
+                return ssid.includes(this.searchQuery) || bssid.includes(this.searchQuery) || vendor.includes(this.searchQuery);
+            })
+            .sort((a, b) => b.risk_score - a.risk_score);
 
         this.networkList.innerHTML = networks.map((network) => `
             <div class="network-item" data-bssid="${network.bssid}">

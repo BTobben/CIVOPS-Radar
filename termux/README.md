@@ -52,7 +52,7 @@ cd /data/data/com.termux/files/home/radar
 ./radar_prototype.sh export json
 
 # Start web interface
-python server/app.py
+python -m server.app
 ```
 
 ## Scanner Script (`radar_prototype.sh`)
@@ -325,7 +325,7 @@ Start the web interface:
 
 ```bash
 cd /data/data/com.termux/files/home/radar
-python server/app.py
+python -m server.app
 ```
 
 Access at: `http://localhost:5000`

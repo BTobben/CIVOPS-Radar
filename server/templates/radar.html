@@ -16,6 +16,7 @@
         <main class="main-layout">
             <section class="panel">
                 <h2>Detected Networks</h2>
+                <input id="networkSearch" class="search-input" type="search" placeholder="Search SSID / BSSID / vendor">
                 <div class="network-list" id="networkItems"></div>
             </section>
 
@@ -31,23 +32,29 @@
             </section>
 
             <section class="panel">
-                <h2>Statistics</h2>
-                <div class="stats-grid">
-                    <div class="stat-card">Total: <span id="totalNetworks">0</span></div>
-                    <div class="stat-card">Active: <span id="activeNetworks">0</span></div>
-                    <div class="stat-card">High Risk: <span id="highRiskNetworks">0</span></div>
-                    <div class="stat-card">Open: <span id="openNetworks">0</span></div>
-                    <div class="stat-card">Hidden: <span id="hiddenNetworks">0</span></div>
-                </div>
+                <div class="bottom-groups">
+                    <div class="panel-subgroup">
+                        <h2>Statistics</h2>
+                        <div class="stats-grid">
+                            <div class="stat-card">Total: <span id="totalNetworks">0</span></div>
+                            <div class="stat-card">Active: <span id="activeNetworks">0</span></div>
+                            <div class="stat-card">High Risk: <span id="highRiskNetworks">0</span></div>
+                            <div class="stat-card">Open: <span id="openNetworks">0</span></div>
+                            <div class="stat-card">Hidden: <span id="hiddenNetworks">0</span></div>
+                        </div>
+                    </div>
 
-                <h2>Controls</h2>
-                <div class="controls">
-                    <button id="scanButton" class="button scan"><span class="status-indicator"></span>Start Scan</button>
-                    <button id="exportButton" class="button export">Export Data</button>
-                    <button id="clearButton" class="button clear">Clear Data</button>
+                    <div class="panel-subgroup">
+                        <h2>Controls</h2>
+                        <div class="controls">
+                            <button id="scanButton" class="button scan"><span class="status-indicator"></span>Start Scan</button>
+                            <button id="exportButton" class="button export">Export Data</button>
+                            <button id="clearButton" class="button clear">Clear Data</button>
+                        </div>
+                        <p>Status: <span id="statusText">Ready</span></p>
+                        <p>Last Update: <span id="lastUpdate">Never</span></p>
+                    </div>
                 </div>
-                <p>Status: <span id="statusText">Ready</span></p>
-                <p>Last Update: <span id="lastUpdate">Never</span></p>
             </section>
         </main>
     </div>

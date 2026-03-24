@@ -173,12 +173,19 @@ echo "Web interface will be available at: http://localhost:5000"
 echo "Press Ctrl+C to stop"
 
 # Start the web server in background
-python server/app.py &
+python -m server.app > server.log 2>&1 &
 SERVER_PID=$!
 
 # Start the scanner
-./radar_prototype.sh scan &
+./radar_prototype.sh scan > scanner.log 2>&1 &
 SCANNER_PID=$!
+
+sleep 3
+if curl -sf http://127.0.0.1:5000/api/v1/health >/dev/null; then
+  echo "[PASS] Health endpoint reachable at /api/v1/health"
+else
+  echo "[FAIL] Health endpoint unavailable. Check server.log"
+fi
 
 # Wait for user interrupt
 trap 'kill $SERVER_PID $SCANNER_PID; exit 0' INT
@@ -196,7 +203,7 @@ echo "Stopping CIVOPS-Radar..."
 
 # Kill any running radar processes
 pkill -f "radar_prototype.sh" || true
-pkill -f "server/app.py" || true
+pkill -f "server.app" || true
 
 echo "CIVOPS-Radar stopped"
 EOF

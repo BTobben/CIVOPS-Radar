@@ -21,7 +21,7 @@ def load_config() -> RadarConfig:
     radar_dir = os.getenv("RADAR_DIR", DEFAULT_RADAR_DIR)
     db_path = os.getenv("RADAR_DB_PATH", os.path.join(radar_dir, "data", "scans.db"))
     export_dir = os.getenv("RADAR_EXPORT_DIR", os.path.join(radar_dir, "exports"))
-    scanner_backend = os.getenv("RADAR_SCANNER_BACKEND", "mock").lower()
+    scanner_backend = os.getenv("RADAR_SCANNER_BACKEND", "termux").lower()
 
     return RadarConfig(
         radar_dir=radar_dir,

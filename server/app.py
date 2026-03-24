@@ -4,6 +4,12 @@
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 
 from flask import Flask, jsonify, render_template
 from flask_cors import CORS
@@ -23,7 +29,7 @@ def create_app() -> Flask:
     repository = ScanRepository(config.db_path)
     repository.initialize()
 
-    scanner = build_scanner(config.scanner_backend)
+    scanner = build_scanner(config.scanner_backend, config.db_path)
     service = RadarService(repository=repository, scanner=scanner, export_dir=config.export_dir)
 
     app = Flask(__name__)
