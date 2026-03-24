@@ -1,5 +1,13 @@
-class RadarDisplay {
-    constructor() {
+(function () {
+    function boolLabel(value) {
+        return value ? 'yes' : 'no';
+    }
+
+    function nowIso() {
+        return new Date().toISOString();
+    }
+
+    function RadarDisplay() {
         this.radarScreen = document.getElementById('radarScreen');
         this.networkList = document.getElementById('networkItems');
         this.networkInfo = document.getElementById('networkInfo');
@@ -8,102 +16,211 @@ class RadarDisplay {
         this.clearButton = document.getElementById('clearButton');
         this.networkSearch = document.getElementById('networkSearch');
 
+        this.frontendStatus = document.getElementById('frontendStatus');
+        this.featureProbeNode = document.getElementById('featureProbe');
+        this.pollStatusNode = document.getElementById('pollStatus');
+        this.radarMetricsNode = document.getElementById('radarMetrics');
+        this.lastErrorNode = document.getElementById('lastError');
+
+        this.version = '20260324b';
         this.networks = new Map();
         this.isScanning = false;
         this.updateInterval = null;
-        this.fixtureMode = new URLSearchParams(window.location.search).get('fixture') === 'stress';
         this.searchQuery = '';
+        this.lastPollTime = null;
+
+        var params = new URLSearchParams(window.location.search);
+        this.fixtureMode = params.get('fixture') === 'stress';
+        this.debugMode = params.get('debug') === '1';
 
         this.init();
     }
 
-    init() {
-        this.setupEventListeners();
-        if (this.fixtureMode) {
-            this.loadStressFixture();
+    RadarDisplay.prototype.setStatus = function (message) {
+        this.frontendStatus.textContent = message;
+    };
+
+    RadarDisplay.prototype.setLastError = function (message) {
+        this.lastErrorNode.textContent = 'Last error: ' + message;
+    };
+
+    RadarDisplay.prototype.updatePollStatus = function (extra) {
+        var stamp = this.lastPollTime ? new Date(this.lastPollTime).toLocaleTimeString() : 'never';
+        var suffix = extra ? ' • ' + extra : '';
+        this.pollStatusNode.textContent = 'Last poll: ' + stamp + suffix;
+    };
+
+    RadarDisplay.prototype.renderFeatureProbe = function () {
+        var features = {
+            fetch: typeof window.fetch === 'function',
+            map: typeof window.Map === 'function',
+            promise: typeof window.Promise === 'function',
+            querySelector: typeof document.querySelector === 'function'
+        };
+
+        this.featureProbeNode.textContent =
+            'Features fetch:' + boolLabel(features.fetch) +
+            ' Map:' + boolLabel(features.map) +
+            ' Promise:' + boolLabel(features.promise) +
+            ' querySelector:' + boolLabel(features.querySelector);
+
+        if (!features.fetch || !features.map || !features.promise || !features.querySelector) {
+            this.setStatus('Browser runtime too old for current frontend');
+            this.setLastError('Browser compatibility issue suspected');
+            return false;
         }
-        this.startAutoUpdate();
-        this.updateStatistics();
-    }
 
-    setupEventListeners() {
-        this.scanButton.addEventListener('click', () => this.toggleScan());
-        this.exportButton.addEventListener('click', () => this.exportData());
-        this.clearButton.addEventListener('click', () => this.clearData());
-        this.networkSearch.addEventListener('input', (event) => {
-            this.searchQuery = event.target.value.toLowerCase().trim();
-            this.updateNetworkList();
+        return true;
+    };
+
+    RadarDisplay.prototype.init = function () {
+        try {
+            this.setStatus('Frontend initialized');
+            this.setLastError('none');
+            this.updatePollStatus();
+
+            if (!this.renderFeatureProbe()) {
+                return;
+            }
+
+            this.setupEventListeners();
+            if (this.fixtureMode) {
+                this.loadStressFixture();
+            }
+
+            this.waitForRadarViewport();
+            this.startAutoUpdate();
+            this.updateStatistics();
+        } catch (error) {
+            console.error(error);
+            this.setStatus('Frontend initialization failed');
+            this.setLastError(String(error));
+        }
+    };
+
+    RadarDisplay.prototype.setupEventListeners = function () {
+        var self = this;
+        this.scanButton.addEventListener('click', function () { self.toggleScan(); });
+        this.exportButton.addEventListener('click', function () { self.exportData(); });
+        this.clearButton.addEventListener('click', function () { self.clearData(); });
+        this.networkSearch.addEventListener('input', function (event) {
+            self.searchQuery = String(event.target.value || '').toLowerCase().trim();
+            self.updateNetworkList();
         });
-    }
 
-    getRadarMetrics() {
-        const rect = this.radarScreen.getBoundingClientRect();
+        window.addEventListener('resize', function () { self.onViewportChange(); });
+        window.addEventListener('orientationchange', function () { self.onViewportChange(); });
+        window.addEventListener('load', function () { self.onViewportChange(); });
+    };
+
+    RadarDisplay.prototype.onViewportChange = function () {
+        this.waitForRadarViewport();
+        this.updateRadarDisplay();
+    };
+
+    RadarDisplay.prototype.waitForRadarViewport = function () {
+        var self = this;
+        var attempts = 0;
+
+        function check() {
+            attempts += 1;
+            var rect = self.radarScreen.getBoundingClientRect();
+            var width = Math.round(rect.width);
+            var height = Math.round(rect.height);
+            self.radarMetricsNode.textContent = 'Radar: ' + width + 'x' + height;
+
+            if (width >= 120 && height >= 120) {
+                if (self.debugMode) {
+                    self.setStatus('Radar viewport ready');
+                }
+                return;
+            }
+
+            if (attempts < 20) {
+                window.setTimeout(check, 100);
+                return;
+            }
+
+            self.setStatus('Radar viewport not ready');
+            self.setLastError('Radar container size too small for plotting');
+        }
+
+        check();
+    };
+
+    RadarDisplay.prototype.getRadarMetrics = function () {
+        var rect = this.radarScreen.getBoundingClientRect();
         return {
             centerX: rect.width / 2,
             centerY: rect.height / 2,
             radius: rect.width / 2,
+            width: rect.width,
+            height: rect.height
         };
-    }
+    };
 
-    async fetchV1(path, options) {
-        const response = await fetch(path, options);
-        const payload = await response.json();
-        if (!response.ok || payload.ok === false) {
-            throw new Error(payload?.error?.message || `Request failed: ${response.status}`);
-        }
-        return payload.data;
-    }
+    RadarDisplay.prototype.fetchV1 = function (path, options) {
+        var self = this;
+        this.setStatus('Fetching ' + path + ' ...');
+        return fetch(path, options).then(function (response) {
+            return response.json().then(function (payload) {
+                if (!response.ok || payload.ok === false) {
+                    var errMessage = 'Request failed: ' + response.status;
+                    if (payload && payload.error && payload.error.message) {
+                        errMessage = payload.error.message;
+                    }
+                    throw new Error(errMessage);
+                }
+                return payload.data;
+            });
+        }).catch(function (error) {
+            console.error(error);
+            self.setStatus('API request failed');
+            self.setLastError(String(error));
+            throw error;
+        });
+    };
 
-    async toggleScan() {
+    RadarDisplay.prototype.toggleScan = function () {
         if (this.isScanning) {
-            await this.stopScan();
-            return;
+            return this.stopScan();
         }
-        await this.startScan();
-    }
+        return this.startScan();
+    };
 
-    async startScan() {
-        try {
-            const data = await this.fetchV1('/api/v1/scan/start', { method: 'POST' });
+    RadarDisplay.prototype.startScan = function () {
+        var self = this;
+        return this.fetchV1('/api/v1/scan/start', { method: 'POST' }).then(function (data) {
             if (data.status === 'scan_started') {
-                this.isScanning = true;
-                this.scanButton.innerHTML = '<span class="status-indicator"></span>Stop Scan';
-                this.updateStatus('Scanning...');
+                self.isScanning = true;
+                self.scanButton.innerHTML = '<span class="status-indicator"></span>Stop Scan';
+                self.updateStatus('Scanning...');
                 document.getElementById('scanningOverlay').style.display = 'block';
             }
-        } catch (error) {
-            this.updateStatus('Error starting scan');
-            console.error(error);
-        }
-    }
+        });
+    };
 
-    async stopScan() {
-        try {
-            const data = await this.fetchV1('/api/v1/scan/stop', { method: 'POST' });
+    RadarDisplay.prototype.stopScan = function () {
+        var self = this;
+        return this.fetchV1('/api/v1/scan/stop', { method: 'POST' }).then(function (data) {
             if (data.status === 'scan_stopped') {
-                this.isScanning = false;
-                this.scanButton.innerHTML = '<span class="status-indicator"></span>Start Scan';
-                this.updateStatus('Stopped');
+                self.isScanning = false;
+                self.scanButton.innerHTML = '<span class="status-indicator"></span>Start Scan';
+                self.updateStatus('Stopped');
                 document.getElementById('scanningOverlay').style.display = 'none';
             }
-        } catch (error) {
-            this.updateStatus('Error stopping scan');
-            console.error(error);
-        }
-    }
+        });
+    };
 
-    async exportData() {
-        try {
-            const data = await this.fetchV1('/api/v1/export/json');
+    RadarDisplay.prototype.exportData = function () {
+        var self = this;
+        this.fetchV1('/api/v1/export/json').then(function (data) {
             window.location.href = data.download_path;
-            this.updateStatus('Data exported');
-        } catch (error) {
-            this.updateStatus('Export failed');
-            console.error(error);
-        }
-    }
+            self.updateStatus('Data exported');
+        });
+    };
 
-    clearData() {
+    RadarDisplay.prototype.clearData = function () {
         if (!window.confirm('Are you sure you want to clear all scan data?')) {
             return;
         }
@@ -111,151 +228,177 @@ class RadarDisplay {
         this.updateRadarDisplay();
         this.updateNetworkList();
         this.updateStatus('Data cleared');
-    }
+    };
 
-    startAutoUpdate() {
-        this.updateInterval = setInterval(() => {
-            this.updateSignals();
-            this.updateStatistics();
+    RadarDisplay.prototype.startAutoUpdate = function () {
+        var self = this;
+        this.updateInterval = setInterval(function () {
+            self.updateSignals();
+            self.updateStatistics();
         }, 3000);
-    }
+    };
 
-    async updateSignals() {
+    RadarDisplay.prototype.updateSignals = function () {
+        var self = this;
         if (this.fixtureMode) {
             return;
         }
 
-        try {
-            const data = await this.fetchV1('/api/v1/signals');
+        this.fetchV1('/api/v1/signals').then(function (data) {
             if (!data.signals) {
+                self.setStatus('No scan data available');
                 return;
             }
-            data.signals.forEach((signal) => this.networks.set(signal.bssid, signal));
-            this.updateRadarDisplay();
-            this.updateNetworkList();
-            this.updateLastUpdate(new Date().toISOString());
-        } catch (error) {
-            console.error(error);
-        }
-    }
 
-    createNetworkDot(network) {
-        const dot = document.createElement('div');
+            data.signals.forEach(function (signal) {
+                self.networks.set(signal.bssid, signal);
+            });
+
+            self.lastPollTime = nowIso();
+            self.updatePollStatus('Signals loaded: ' + data.signals.length);
+            self.updateRadarDisplay();
+            self.updateNetworkList();
+            self.updateLastUpdate(self.lastPollTime);
+            self.setStatus('Live data loaded');
+        });
+    };
+
+    RadarDisplay.prototype.createNetworkDot = function (network) {
+        var dot = document.createElement('div');
         dot.className = 'network-dot';
         dot.dataset.bssid = network.bssid;
 
-        let riskClass = 'low-risk';
-        if (network.risk_score > 70) riskClass = 'high-risk';
-        else if (network.risk_score > 30) riskClass = 'medium-risk';
+        var riskClass = 'low-risk';
+        if (network.risk_score > 70) {
+            riskClass = 'high-risk';
+        } else if (network.risk_score > 30) {
+            riskClass = 'medium-risk';
+        }
         dot.classList.add(riskClass);
 
-        const { centerX, centerY, radius } = this.getRadarMetrics();
-        const x = centerX + (network.position.x * radius);
-        const y = centerY + (network.position.y * radius);
+        var metrics = this.getRadarMetrics();
+        if (metrics.width < 120 || metrics.height < 120) {
+            return null;
+        }
 
-        dot.style.left = `${x}px`;
-        dot.style.top = `${y}px`;
-        dot.addEventListener('click', (event) => {
+        var x = metrics.centerX + (network.position.x * metrics.radius);
+        var y = metrics.centerY + (network.position.y * metrics.radius);
+
+        dot.style.left = x + 'px';
+        dot.style.top = y + 'px';
+
+        var self = this;
+        dot.addEventListener('click', function (event) {
             event.stopPropagation();
-            this.showNetworkInfo(network, event);
+            self.showNetworkInfo(network, event);
         });
 
         return dot;
-    }
+    };
 
-    updateRadarDisplay() {
-        this.radarScreen.querySelectorAll('.network-dot').forEach((dot) => dot.remove());
-        this.networks.forEach((network) => {
-            this.radarScreen.appendChild(this.createNetworkDot(network));
+    RadarDisplay.prototype.updateRadarDisplay = function () {
+        var self = this;
+        this.radarScreen.querySelectorAll('.network-dot').forEach(function (dot) { dot.remove(); });
+        this.networks.forEach(function (network) {
+            var dot = self.createNetworkDot(network);
+            if (dot) {
+                self.radarScreen.appendChild(dot);
+            }
         });
-    }
+    };
 
-    showNetworkInfo(network, event) {
-        this.networkInfo.innerHTML = `
-            <div><strong>${network.ssid || 'Hidden'}</strong></div>
-            <div>${network.bssid}</div>
-            <div>Signal: ${network.level} dBm</div>
-            <div>Distance: ${Number(network.distance || 0).toFixed(1)}m</div>
-            <div>Risk: ${network.risk_score}/100</div>
-            <div>Security: ${network.capabilities || 'Unknown'}</div>
-            <div>Frequency: ${network.frequency} MHz</div>
-        `;
+    RadarDisplay.prototype.showNetworkInfo = function (network, event) {
+        this.networkInfo.innerHTML =
+            '<div><strong>' + (network.ssid || 'Hidden') + '</strong></div>' +
+            '<div>' + network.bssid + '</div>' +
+            '<div>Signal: ' + network.level + ' dBm</div>' +
+            '<div>Distance: ' + Number(network.distance || 0).toFixed(1) + 'm</div>' +
+            '<div>Risk: ' + network.risk_score + '/100</div>' +
+            '<div>Security: ' + (network.capabilities || 'Unknown') + '</div>' +
+            '<div>Frequency: ' + network.frequency + ' MHz</div>';
 
-        this.networkInfo.style.left = `${event.clientX + 10}px`;
-        this.networkInfo.style.top = `${event.clientY + 10}px`;
+        this.networkInfo.style.left = (event.clientX + 10) + 'px';
+        this.networkInfo.style.top = (event.clientY + 10) + 'px';
         this.networkInfo.style.display = 'block';
-    }
+    };
 
-    updateNetworkList() {
-        const networks = Array.from(this.networks.values())
-            .filter((network) => {
-                if (!this.searchQuery) return true;
-                const ssid = (network.ssid || '').toLowerCase();
-                const bssid = (network.bssid || '').toLowerCase();
-                const vendor = (network.vendor || '').toLowerCase();
-                return ssid.includes(this.searchQuery) || bssid.includes(this.searchQuery) || vendor.includes(this.searchQuery);
+    RadarDisplay.prototype.updateNetworkList = function () {
+        var self = this;
+        var networks = Array.from(this.networks.values())
+            .filter(function (network) {
+                if (!self.searchQuery) {
+                    return true;
+                }
+                var ssid = String(network.ssid || '').toLowerCase();
+                var bssid = String(network.bssid || '').toLowerCase();
+                var vendor = String(network.vendor || '').toLowerCase();
+                return ssid.indexOf(self.searchQuery) !== -1 || bssid.indexOf(self.searchQuery) !== -1 || vendor.indexOf(self.searchQuery) !== -1;
             })
-            .sort((a, b) => b.risk_score - a.risk_score);
+            .sort(function (a, b) { return b.risk_score - a.risk_score; });
 
-        this.networkList.innerHTML = networks.map((network) => `
-            <div class="network-item" data-bssid="${network.bssid}">
-                <div><strong>${network.ssid || 'Hidden'}</strong></div>
-                <div class="text-xs">${network.bssid}</div>
-                <div>${network.level} dBm • Risk ${network.risk_score}</div>
-            </div>
-        `).join('');
+        this.networkList.innerHTML = networks.map(function (network) {
+            return '<div class="network-item" data-bssid="' + network.bssid + '">' +
+                '<div><strong>' + (network.ssid || 'Hidden') + '</strong></div>' +
+                '<div class="text-xs">' + network.bssid + '</div>' +
+                '<div>' + network.level + ' dBm • Risk ' + network.risk_score + '</div>' +
+                '</div>';
+        }).join('');
 
-        this.networkList.querySelectorAll('.network-item').forEach((item) => {
-            item.addEventListener('click', () => {
-                const dot = this.radarScreen.querySelector(`[data-bssid="${item.dataset.bssid}"]`);
-                if (!dot) return;
+        this.networkList.querySelectorAll('.network-item').forEach(function (item) {
+            item.addEventListener('click', function () {
+                var dot = self.radarScreen.querySelector('[data-bssid="' + item.dataset.bssid + '"]');
+                if (!dot) {
+                    return;
+                }
                 dot.style.transform = 'translate(-50%, -50%) scale(1.8)';
-                setTimeout(() => { dot.style.transform = 'translate(-50%, -50%) scale(1)'; }, 600);
+                setTimeout(function () { dot.style.transform = 'translate(-50%, -50%) scale(1)'; }, 600);
             });
         });
-    }
+    };
 
-    async updateStatistics() {
+    RadarDisplay.prototype.updateStatistics = function () {
+        var self = this;
         if (this.fixtureMode) {
             document.getElementById('totalNetworks').textContent = this.networks.size;
             document.getElementById('activeNetworks').textContent = this.networks.size;
-            document.getElementById('highRiskNetworks').textContent = Array.from(this.networks.values()).filter((n) => n.risk_score > 50).length;
-            document.getElementById('openNetworks').textContent = Array.from(this.networks.values()).filter((n) => n.is_open).length;
-            document.getElementById('hiddenNetworks').textContent = Array.from(this.networks.values()).filter((n) => n.is_hidden).length;
+            document.getElementById('highRiskNetworks').textContent = Array.from(this.networks.values()).filter(function (n) { return n.risk_score > 50; }).length;
+            document.getElementById('openNetworks').textContent = Array.from(this.networks.values()).filter(function (n) { return n.is_open; }).length;
+            document.getElementById('hiddenNetworks').textContent = Array.from(this.networks.values()).filter(function (n) { return n.is_hidden; }).length;
             return;
         }
 
-        try {
-            const stats = await this.fetchV1('/api/v1/statistics');
+        this.fetchV1('/api/v1/statistics').then(function (stats) {
             document.getElementById('totalNetworks').textContent = stats.total_networks || 0;
             document.getElementById('activeNetworks').textContent = stats.active_networks || 0;
             document.getElementById('highRiskNetworks').textContent = stats.high_risk_networks || 0;
             document.getElementById('openNetworks').textContent = stats.open_networks || 0;
             document.getElementById('hiddenNetworks').textContent = stats.hidden_networks || 0;
-        } catch (error) {
-            console.error(error);
-        }
-    }
+            self.setStatus('Statistics updated');
+        });
+    };
 
-    updateStatus(message) {
+    RadarDisplay.prototype.updateStatus = function (message) {
         document.getElementById('statusText').textContent = message;
-    }
+    };
 
-    updateLastUpdate(timestamp) {
-        if (!timestamp) return;
+    RadarDisplay.prototype.updateLastUpdate = function (timestamp) {
+        if (!timestamp) {
+            return;
+        }
         document.getElementById('lastUpdate').textContent = new Date(timestamp).toLocaleTimeString();
-    }
+    };
 
-    loadStressFixture() {
-        const levels = [-32, -44, -58, -67, -78, -85];
-        for (let i = 0; i < 70; i += 1) {
-            const bssid = `AA:BB:CC:${String(i).padStart(2, '0')}:DD:EE`;
-            const level = levels[i % levels.length];
-            const risk = (i * 7) % 100;
+    RadarDisplay.prototype.loadStressFixture = function () {
+        var levels = [-32, -44, -58, -67, -78, -85];
+        var i;
+        for (i = 0; i < 70; i += 1) {
+            var bssid = 'AA:BB:CC:' + String(i).padStart(2, '0') + ':DD:EE';
+            var level = levels[i % levels.length];
+            var risk = (i * 7) % 100;
             this.networks.set(bssid, {
-                bssid,
-                ssid: `Very-Long-SSID-For-Stress-Validation-Network-${i.toString().padStart(3, '0')}`,
-                level,
+                bssid: bssid,
+                ssid: 'Very-Long-SSID-For-Stress-Validation-Network-' + String(i).padStart(3, '0'),
+                level: level,
                 distance: Math.max(1, Math.abs(level) / 2),
                 risk_score: risk,
                 is_hidden: i % 9 === 0,
@@ -264,24 +407,40 @@ class RadarDisplay {
                 frequency: i % 2 === 0 ? 2412 : 5180,
                 position: {
                     x: Math.cos(i * 0.5) * ((i % 10) / 10),
-                    y: Math.sin(i * 0.5) * ((i % 10) / 10),
-                },
+                    y: Math.sin(i * 0.5) * ((i % 10) / 10)
+                }
             });
         }
 
+        this.lastPollTime = nowIso();
+        this.updatePollStatus('Fixture data active');
         this.updateStatus('Fixture: stress mode');
         this.updateRadarDisplay();
         this.updateNetworkList();
-        this.updateLastUpdate(new Date().toISOString());
-    }
-}
+        this.updateLastUpdate(this.lastPollTime);
+        this.setStatus('Live data loaded');
+    };
 
-document.addEventListener('DOMContentLoaded', () => {
-    new RadarDisplay();
-
-    document.addEventListener('click', (event) => {
-        if (!event.target.closest('.network-dot') && !event.target.closest('.network-info')) {
-            document.getElementById('networkInfo').style.display = 'none';
+    document.addEventListener('DOMContentLoaded', function () {
+        var app;
+        try {
+            app = new RadarDisplay();
+        } catch (error) {
+            console.error(error);
+            var fallback = document.getElementById('frontendStatus');
+            var lastError = document.getElementById('lastError');
+            if (fallback) {
+                fallback.textContent = 'Frontend initialization failed';
+            }
+            if (lastError) {
+                lastError.textContent = 'Last error: ' + String(error);
+            }
         }
+
+        document.addEventListener('click', function (event) {
+            if (!event.target.closest('.network-dot') && !event.target.closest('.network-info')) {
+                document.getElementById('networkInfo').style.display = 'none';
+            }
+        });
     });
-});
+})();

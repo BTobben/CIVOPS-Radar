@@ -55,10 +55,21 @@ class TermuxScannerAdapter(ScannerAdapter):
 
             if row and row[0]:
                 latest_scan_time = row[0]
-                parsed = datetime.fromisoformat(str(row[0]).replace("Z", "+00:00"))
+                raw = str(row[0]).strip()
+                parsed = None
+
+                # SQLite defaults are often naive local timestamps like "YYYY-MM-DD HH:MM:SS".
+                try:
+                    parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                except ValueError:
+                    parsed = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S")
+
                 if parsed.tzinfo is None:
-                    parsed = parsed.replace(tzinfo=timezone.utc)
-                latest_scan_age_seconds = int((datetime.now(timezone.utc) - parsed).total_seconds())
+                    age_delta = datetime.now() - parsed
+                else:
+                    age_delta = datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)
+
+                latest_scan_age_seconds = max(0, int(age_delta.total_seconds()))
         except Exception:
             db_ready = False
 

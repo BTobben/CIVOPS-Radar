@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>CIVOPS-Radar - Wi-Fi Network Scanner</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/radar.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/radar.css', v='20260324b') }}">
 </head>
 <body>
     <div class="app-shell">
@@ -14,16 +14,12 @@
         </header>
 
         <main class="main-layout">
-            <section class="panel">
-                <h2>Detected Networks</h2>
-                <input id="networkSearch" class="search-input" type="search" placeholder="Search SSID / BSSID / vendor">
-                <div class="network-list" id="networkItems"></div>
-            </section>
-
-            <section class="panel radar-panel">
+            <section class="panel radar-panel" id="radarPanel">
                 <div class="radar-screen" id="radarScreen">
                     <div class="radar-center"></div>
-                    <div class="radar-sweep"></div>
+                    <div class="radar-sweep-pivot">
+                        <div class="radar-sweep-line"></div>
+                    </div>
                     <div class="range-ring ring-1"></div>
                     <div class="range-ring ring-2"></div>
                     <div class="range-ring ring-3"></div>
@@ -31,8 +27,18 @@
                 </div>
             </section>
 
-            <section class="panel">
+            <section class="panel status-panel">
                 <div class="bottom-groups">
+                    <div class="panel-subgroup">
+                        <h2>Diagnostics</h2>
+                        <div id="frontendStatus" class="diag-line">Initializing...</div>
+                        <div id="frontendVersion" class="diag-line">Frontend: 20260324b</div>
+                        <div id="featureProbe" class="diag-line"></div>
+                        <div id="pollStatus" class="diag-line">Last poll: never</div>
+                        <div id="radarMetrics" class="diag-line">Radar: pending</div>
+                        <div id="lastError" class="diag-line">Last error: none</div>
+                    </div>
+
                     <div class="panel-subgroup">
                         <h2>Statistics</h2>
                         <div class="stats-grid">
@@ -56,10 +62,16 @@
                     </div>
                 </div>
             </section>
+
+            <section class="panel list-panel">
+                <h2>Detected Networks</h2>
+                <input id="networkSearch" class="search-input" type="search" placeholder="Search SSID / BSSID / vendor">
+                <div class="network-list" id="networkItems"></div>
+            </section>
         </main>
     </div>
 
     <div class="network-info" id="networkInfo"></div>
-    <script src="{{ url_for('static', filename='js/radar.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/radar.js', v='20260324b') }}"></script>
 </body>
 </html>
