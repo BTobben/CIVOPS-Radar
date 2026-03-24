@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>CIVOPS-Radar - Wi-Fi Network Scanner</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/radar.css', v='20260324b') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/radar.css', v='20260324c') }}">
 </head>
 <body>
     <div class="app-shell">
@@ -13,9 +13,10 @@
             <div>Offline-first Wi-Fi situational awareness</div>
         </header>
 
-        <main class="main-layout">
+        <main class="main-layout" id="mainLayout" data-layout-mode="balanced">
             <section class="panel radar-panel" id="radarPanel">
                 <div class="radar-screen" id="radarScreen">
+                    <div class="radar-state" id="radarState">Radar plotting pending</div>
                     <div class="radar-center"></div>
                     <div class="radar-sweep-pivot">
                         <div class="radar-sweep-line"></div>
@@ -30,13 +31,22 @@
             <section class="panel status-panel">
                 <div class="bottom-groups">
                     <div class="panel-subgroup">
-                        <h2>Diagnostics</h2>
-                        <div id="frontendStatus" class="diag-line">Initializing...</div>
-                        <div id="frontendVersion" class="diag-line">Frontend: 20260324b</div>
-                        <div id="featureProbe" class="diag-line"></div>
-                        <div id="pollStatus" class="diag-line">Last poll: never</div>
-                        <div id="radarMetrics" class="diag-line">Radar: pending</div>
-                        <div id="lastError" class="diag-line">Last error: none</div>
+                        <div class="group-header-row">
+                            <h2>Diagnostics</h2>
+                            <button id="retryRadarButton" class="mini-btn" type="button" hidden>Retry radar layout</button>
+                        </div>
+                        <details id="diagnosticsDetails" class="diagnostics-details">
+                            <summary>Frontend status</summary>
+                            <div class="diag-block">
+                                <div id="frontendStatus" class="diag-line">Initializing...</div>
+                                <div id="frontendVersion" class="diag-line">Frontend: 20260324c</div>
+                                <div id="featureProbe" class="diag-line"></div>
+                                <div id="pollStatus" class="diag-line">Last poll: never</div>
+                                <div id="radarMetrics" class="diag-line">Radar: pending</div>
+                                <div id="radarReadiness" class="diag-line">Radar state: pending</div>
+                                <div id="lastError" class="diag-line">Last error: none</div>
+                            </div>
+                        </details>
                     </div>
 
                     <div class="panel-subgroup">
@@ -65,6 +75,31 @@
 
             <section class="panel list-panel">
                 <h2>Detected Networks</h2>
+                <div class="control-grid compact">
+                    <label>Layout
+                        <select id="layoutModeSelect">
+                            <option value="focus-radar">Focus Radar</option>
+                            <option value="balanced" selected>Balanced</option>
+                            <option value="focus-list">Focus List</option>
+                        </select>
+                    </label>
+                    <label>Sort
+                        <select id="sortModeSelect">
+                            <option value="signal" selected>Signal</option>
+                            <option value="recent">Recent</option>
+                            <option value="risk">Risk</option>
+                            <option value="ssid">SSID</option>
+                        </select>
+                    </label>
+                    <label>Filter
+                        <select id="filterModeSelect">
+                            <option value="all" selected>All</option>
+                            <option value="hidden">Hidden</option>
+                            <option value="open">Open</option>
+                            <option value="high-risk">High risk</option>
+                        </select>
+                    </label>
+                </div>
                 <input id="networkSearch" class="search-input" type="search" placeholder="Search SSID / BSSID / vendor">
                 <div class="network-list" id="networkItems"></div>
             </section>
@@ -72,6 +107,6 @@
     </div>
 
     <div class="network-info" id="networkInfo"></div>
-    <script src="{{ url_for('static', filename='js/radar.js', v='20260324b') }}"></script>
+    <script src="{{ url_for('static', filename='js/radar.js', v='20260324c') }}"></script>
 </body>
 </html>
