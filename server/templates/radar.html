@@ -4,23 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>CIVOPS-Radar - Wi-Fi Network Scanner</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/radar.css', v='20260324c') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/radar.css', v='20260324d') }}">
 </head>
 <body>
     <div class="app-shell">
         <header class="app-header">
-            <div class="header-title">CIVOPS-Radar</div>
-            <div>Offline-first Wi-Fi situational awareness</div>
+            <div>
+                <div class="header-title">CIVOPS-Radar</div>
+                <div>Offline-first Wi-Fi situational awareness</div>
+            </div>
+            <div class="header-actions">
+                <button id="menuToggle" class="menu-btn" type="button">☰ Menu</button>
+                <div id="headerMenu" class="header-menu" hidden>
+                    <button type="button" data-menu-action="edit-layout">Edit layout</button>
+                    <button type="button" data-menu-action="reset-layout">Reset layout</button>
+                    <button type="button" data-menu-action="new-session">New session</button>
+                    <button type="button" data-menu-action="clear-ui">Clear UI</button>
+                    <button type="button" data-menu-action="toggle-diagnostics">Toggle diagnostics</button>
+                    <button type="button" data-menu-action="retry-radar">Retry radar layout</button>
+                </div>
+            </div>
         </header>
 
-        <main class="main-layout" id="mainLayout" data-layout-mode="balanced">
-            <section class="panel radar-panel" id="radarPanel">
+        <main class="main-layout" id="mainLayout">
+            <section class="panel panel-block" id="radarPanel" data-panel-id="radar">
+                <div class="panel-meta">
+                    <span class="panel-title">Radar</span>
+                    <label class="order-label" hidden>Order <input class="order-input" data-order-input="radar" type="number" min="1" step="1"></label>
+                </div>
                 <div class="radar-screen" id="radarScreen">
                     <div class="radar-state" id="radarState">Radar plotting pending</div>
                     <div class="radar-center"></div>
-                    <div class="radar-sweep-pivot">
-                        <div class="radar-sweep-line"></div>
-                    </div>
+                    <div class="radar-sweep-pivot"><div class="radar-sweep-line"></div></div>
                     <div class="range-ring ring-1"></div>
                     <div class="range-ring ring-2"></div>
                     <div class="range-ring ring-3"></div>
@@ -28,61 +43,44 @@
                 </div>
             </section>
 
-            <section class="panel status-panel">
-                <div class="bottom-groups">
-                    <div class="panel-subgroup">
-                        <div class="group-header-row">
-                            <h2>Diagnostics</h2>
-                            <button id="retryRadarButton" class="mini-btn" type="button" hidden>Retry radar layout</button>
-                        </div>
-                        <details id="diagnosticsDetails" class="diagnostics-details">
-                            <summary>Frontend status</summary>
-                            <div class="diag-block">
-                                <div id="frontendStatus" class="diag-line">Initializing...</div>
-                                <div id="frontendVersion" class="diag-line">Frontend: 20260324c</div>
-                                <div id="featureProbe" class="diag-line"></div>
-                                <div id="pollStatus" class="diag-line">Last poll: never</div>
-                                <div id="radarMetrics" class="diag-line">Radar: pending</div>
-                                <div id="radarReadiness" class="diag-line">Radar state: pending</div>
-                                <div id="lastError" class="diag-line">Last error: none</div>
-                            </div>
-                        </details>
-                    </div>
-
-                    <div class="panel-subgroup">
-                        <h2>Statistics</h2>
-                        <div class="stats-grid">
-                            <div class="stat-card">Total: <span id="totalNetworks">0</span></div>
-                            <div class="stat-card">Active: <span id="activeNetworks">0</span></div>
-                            <div class="stat-card">High Risk: <span id="highRiskNetworks">0</span></div>
-                            <div class="stat-card">Open: <span id="openNetworks">0</span></div>
-                            <div class="stat-card">Hidden: <span id="hiddenNetworks">0</span></div>
-                        </div>
-                    </div>
-
-                    <div class="panel-subgroup">
-                        <h2>Controls</h2>
-                        <div class="controls">
-                            <button id="scanButton" class="button scan"><span class="status-indicator"></span>Start Scan</button>
-                            <button id="exportButton" class="button export">Export Data</button>
-                            <button id="clearButton" class="button clear">Clear Data</button>
-                        </div>
-                        <p>Status: <span id="statusText">Ready</span></p>
-                        <p>Last Update: <span id="lastUpdate">Never</span></p>
-                    </div>
+            <section class="panel panel-block" id="statisticsPanel" data-panel-id="statistics">
+                <div class="panel-meta">
+                    <span class="panel-title">Statistics</span>
+                    <label class="order-label" hidden>Order <input class="order-input" data-order-input="statistics" type="number" min="1" step="1"></label>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">Total: <span id="totalNetworks">0</span></div>
+                    <div class="stat-card">Active: <span id="activeNetworks">0</span></div>
+                    <div class="stat-card">High Risk: <span id="highRiskNetworks">0</span></div>
+                    <div class="stat-card">Open: <span id="openNetworks">0</span></div>
+                    <div class="stat-card">Hidden: <span id="hiddenNetworks">0</span></div>
                 </div>
             </section>
 
-            <section class="panel list-panel">
-                <h2>Detected Networks</h2>
+            <section class="panel panel-block" id="controlsPanel" data-panel-id="controls">
+                <div class="panel-meta">
+                    <span class="panel-title">Controls</span>
+                    <label class="order-label" hidden>Order <input class="order-input" data-order-input="controls" type="number" min="1" step="1"></label>
+                </div>
+                <div class="controls">
+                    <button id="scanButton" class="button scan"><span class="status-indicator"></span>Start Scan</button>
+                    <button id="stopButton" class="button clear">Stop Scan</button>
+                </div>
+                <div class="session-controls">
+                    <button id="newSessionButton" class="button export">New Session</button>
+                    <button id="clearUiButton" class="button">Clear UI</button>
+                </div>
+                <p>Status: <span id="statusText">Ready</span></p>
+                <p>Last Update: <span id="lastUpdate">Never</span></p>
+                <p>Last Action: <span id="lastAction">None</span></p>
+            </section>
+
+            <section class="panel panel-block" id="networksPanel" data-panel-id="networks">
+                <div class="panel-meta">
+                    <span class="panel-title">Detected Networks</span>
+                    <label class="order-label" hidden>Order <input class="order-input" data-order-input="networks" type="number" min="1" step="1"></label>
+                </div>
                 <div class="control-grid compact">
-                    <label>Layout
-                        <select id="layoutModeSelect">
-                            <option value="focus-radar">Focus Radar</option>
-                            <option value="balanced" selected>Balanced</option>
-                            <option value="focus-list">Focus List</option>
-                        </select>
-                    </label>
                     <label>Sort
                         <select id="sortModeSelect">
                             <option value="signal" selected>Signal</option>
@@ -103,10 +101,29 @@
                 <input id="networkSearch" class="search-input" type="search" placeholder="Search SSID / BSSID / vendor">
                 <div class="network-list" id="networkItems"></div>
             </section>
+
+            <section class="panel panel-block" id="diagnosticsPanel" data-panel-id="diagnostics">
+                <div class="panel-meta">
+                    <span class="panel-title">Diagnostics</span>
+                    <label class="order-label" hidden>Order <input class="order-input" data-order-input="diagnostics" type="number" min="1" step="1"></label>
+                </div>
+                <details id="diagnosticsDetails" class="diagnostics-details">
+                    <summary>Frontend status</summary>
+                    <div class="diag-block">
+                        <div id="frontendStatus" class="diag-line">Initializing...</div>
+                        <div id="frontendVersion" class="diag-line">Frontend: 20260324d</div>
+                        <div id="featureProbe" class="diag-line"></div>
+                        <div id="pollStatus" class="diag-line">Last poll: never</div>
+                        <div id="radarMetrics" class="diag-line">Radar: pending</div>
+                        <div id="radarReadiness" class="diag-line">Radar state: pending</div>
+                        <div id="lastError" class="diag-line">Last error: none</div>
+                    </div>
+                </details>
+            </section>
         </main>
     </div>
 
     <div class="network-info" id="networkInfo"></div>
-    <script src="{{ url_for('static', filename='js/radar.js', v='20260324c') }}"></script>
+    <script src="{{ url_for('static', filename='js/radar.js', v='20260324d') }}"></script>
 </body>
 </html>
