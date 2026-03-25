@@ -1,0 +1,73 @@
+:root {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --accent: #10b981;
+    --text-primary: #f1f5f9;
+    --panel-bg: rgba(15, 23, 42, 0.95);
+    --border: 2px solid var(--accent);
+    --radar-size: min(90vw, 48vh, 500px);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%); color: var(--text-primary); font-family: 'Courier New', monospace; }
+
+.app-shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left)); gap: 0.75rem; }
+
+.app-header { display:flex; justify-content: space-between; align-items: center; gap: 0.75rem; background: rgba(15, 23, 42, 0.82); border:1px solid rgba(16,185,129,.35); border-radius:0.75rem; padding:0.75rem 1rem; }
+.header-title { font-size: 1.22rem; font-weight: 700; }
+
+.header-actions { position: relative; }
+.menu-btn { min-height: 40px; border-radius: 0.5rem; border: 1px solid rgba(16,185,129,.5); background: rgba(2,6,23,.75); color:#ecfeff; padding:0.5rem 0.8rem; }
+.header-menu { position: absolute; right: 0; top: 44px; z-index: 40; display: grid; gap: 0.3rem; width: 210px; background: rgba(2,6,23,.98); border:1px solid rgba(16,185,129,.4); border-radius: 0.6rem; padding: 0.45rem; }
+.header-menu button { min-height: 38px; border-radius: 0.45rem; border: 1px solid rgba(16,185,129,.25); background: rgba(15,23,42,.9); color:#e2e8f0; text-align:left; padding:0.45rem 0.6rem; }
+
+.main-layout { display:grid; grid-template-columns: minmax(0,1fr); gap:0.7rem; }
+.panel { background: var(--panel-bg); border: var(--border); border-radius: 0.75rem; padding: 0.8rem; backdrop-filter: blur(10px); }
+.panel-block { min-width: 0; }
+.panel-meta { display:flex; justify-content: space-between; align-items:center; margin-bottom: 0.5rem; gap: 0.5rem; }
+.panel-title { font-weight: 700; }
+.order-label { font-size: 0.78rem; display:flex; align-items:center; gap: 0.35rem; }
+.order-input { width: 64px; min-height: 34px; border-radius: 0.4rem; border:1px solid rgba(16,185,129,.4); background: rgba(15,23,42,.7); color: #f8fafc; }
+
+.radar-screen { position:relative; margin:0 auto; width:var(--radar-size); height:var(--radar-size); max-width:100%; border:2px solid var(--accent); border-radius:50%; background: radial-gradient(circle, rgba(16,185,129,.1) 0%, transparent 70%); box-shadow: 0 0 20px rgba(16,185,129,.3), inset 0 0 20px rgba(16,185,129,.1); overflow:hidden; }
+.radar-state { position:absolute; top:8px; left:50%; transform:translateX(-50%); font-size:.72rem; color:#d1fae5; background:rgba(2,6,23,.68); border-radius:.4rem; padding:.25rem .5rem; z-index:8; }
+.radar-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:11px; height:11px; border-radius:50%; background:var(--accent); box-shadow:0 0 11px var(--accent), 0 0 22px rgba(16,185,129,.45); }
+.radar-sweep-pivot { position:absolute; inset:0; animation:sweepRotate 4.8s linear infinite; }
+.radar-sweep-line { position:absolute; left:calc(50% - 1px); top:2%; width:2px; height:48%; background: linear-gradient(to top, rgba(16,185,129,.5), rgba(16,185,129,.15), transparent); }
+.range-ring { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); border:1px solid rgba(16,185,129,.35); border-radius:50%; }
+.range-ring.ring-1{ width:calc(var(--radar-size)*.33); height:calc(var(--radar-size)*.33);} .range-ring.ring-2{ width:calc(var(--radar-size)*.66); height:calc(var(--radar-size)*.66);} .range-ring.ring-3{ width:var(--radar-size); height:var(--radar-size);} 
+.network-dot { position:absolute; width:10px; height:10px; border-radius:50%; transform:translate(-50%,-50%); }
+.network-dot.low-risk{ background:#10b981; box-shadow:0 0 10px #10b981;} .network-dot.medium-risk{ background:#f59e0b; box-shadow:0 0 10px #f59e0b;} .network-dot.high-risk{ background:#ef4444; box-shadow:0 0 10px #ef4444; }
+.scanning-overlay{ position:absolute; inset:0; background:radial-gradient(circle,transparent 0%, rgba(16,185,129,.08) 100%); }
+
+.stats-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.45rem; }
+.stat-card { background: rgba(30,41,59,.9); border:1px solid rgba(16,185,129,.28); border-radius:.5rem; padding:.55rem; font-size:.86rem; }
+.controls, .session-controls { display:grid; gap:.5rem; margin-bottom:0.55rem; }
+.button { border:0; color:#fff; border-radius:.5rem; min-height:42px; padding:.75rem; font-weight:700; }
+.button.scan{ background:#047857;} .button.export{ background:#1d4ed8;} .button.clear{ background:#b91c1c;} 
+.status-indicator{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#10b981; margin-right:.45rem; }
+
+.control-grid.compact { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.4rem; margin-bottom:.45rem; }
+.control-grid label { font-size:.78rem; color:#cbd5e1; }
+.control-grid select { width:100%; min-height:36px; border-radius:.45rem; border:1px solid rgba(16,185,129,.35); background:rgba(2,6,23,.65); color:#f8fafc; }
+.search-input{ width:100%; min-height:42px; margin-bottom:.45rem; border-radius:.5rem; border:1px solid rgba(16,185,129,.45); background:rgba(15,23,42,.7); color:#f1f5f9; padding:.7rem; }
+.network-list { min-height: 34vh; max-height: 50vh; overflow-y:auto; }
+.network-item{ padding:.64rem; border-bottom:1px solid rgba(16,185,129,.2); }
+
+.diagnostics-details summary { cursor:pointer; font-size:.88rem; }
+.diag-line{ font-size:.82rem; margin-bottom:.3rem; color:#cbd5e1; word-break:break-word; }
+
+.network-info{ position:fixed; background:rgba(15,23,42,.98); border:2px solid var(--accent); border-radius:12px; padding:12px; font-size:13px; max-width:230px; z-index:20; display:none; }
+
+@media (max-width: 959px) {
+  .diagnostics-details:not([open]) .diag-block{ display:none; }
+}
+
+@media (min-width: 960px) {
+    :root { --radar-size: min(60vw, 72vh, 680px); }
+    .main-layout { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .panel[data-panel-id="radar"] { grid-column: span 2; }
+    .network-list{ min-height: 60vh; max-height: 66vh; }
+}
+
+@keyframes sweepRotate { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }

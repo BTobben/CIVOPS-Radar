@@ -110,133 +110,129 @@ EOF
 # Perform single Wi-Fi scan
 perform_scan() {
     local scan_output
-    local scan_count=0
-    
+    local payload_file
+
     log "${YELLOW}Performing Wi-Fi scan...${NC}"
-    
-    # Use termux-wifi-scaninfo to get scan results
+
     if ! scan_output=$(termux-wifi-scaninfo 2>/dev/null); then
         log "${RED}Failed to get scan results. This may be due to Android throttling.${NC}"
         return 1
     fi
-    
-    # Check if scan output is empty
+
     if [[ -z "$scan_output" ]]; then
         log "${YELLOW}No networks detected in scan.${NC}"
         return 1
     fi
-    
-    # Process scan results with Python
-    python3 -c "
+
+    payload_file=$(mktemp)
+    printf '%s\n' "$scan_output" > "$payload_file"
+
+    if ! python3 - "$DB_PATH" "$payload_file" <<'PY'
 import json
 import sqlite3
 import sys
 from datetime import datetime
 
+
 def calculate_distance(rssi, frequency=2400):
-    '''Calculate approximate distance from RSSI using log-distance model'''
     if rssi == 0:
         return 999.0
-    
-    # Free space path loss model (simplified)
-    # FSPL = 20*log10(d) + 20*log10(f) + 32.45
-    # Where d is distance in meters, f is frequency in MHz
-    
-    # Typical values for 2.4GHz
-    tx_power = 20  # dBm
+    tx_power = 20
     path_loss = tx_power - rssi
-    
     if path_loss <= 0:
         return 0.1
-    
-    # Convert to distance (simplified calculation)
     distance = 10 ** ((path_loss - 32.45 - 20 * 3.38) / 20)
     return max(0.1, min(999.0, distance))
 
+
 def calculate_risk_score(ssid, capabilities, level, is_hidden):
-    '''Calculate risk score based on network characteristics'''
     score = 0
-    
-    # Open network (no security)
     if 'WPA' not in capabilities and 'WEP' not in capabilities:
         score += 30
-    
-    # Hidden SSID
     if is_hidden:
         score += 20
-    
-    # Weak signal (potential rogue AP)
     if level < -80:
         score += 10
-    
-    # Very strong signal (potential close proximity)
     if level > -30:
         score += 5
-    
     return min(100, max(0, score))
 
-def process_scan_data(scan_json):
-    conn = sqlite3.connect('$DB_PATH')
+
+def process_scan_data(db_path, payload_path):
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
     try:
-        scan_data = json.loads(scan_json)
+        with open(payload_path, 'r', encoding='utf-8') as handle:
+            scan_data = json.load(handle)
         current_time = datetime.now().isoformat()
-        
+
         for network in scan_data:
             bssid = network.get('bssid', '')
             ssid = network.get('ssid', '')
             capabilities = network.get('capabilities', '')
             frequency = network.get('frequency', 0)
             level = network.get('level', -100)
-            
-            # Determine if network is hidden or open
+
             is_hidden = ssid == '' or ssid == '<unknown ssid>'
             is_open = 'WPA' not in capabilities and 'WEP' not in capabilities
-            
-            # Calculate distance and risk score
             distance = calculate_distance(level, frequency)
             risk_score = calculate_risk_score(ssid, capabilities, level, is_hidden)
-            
-            # Check if BSSID already exists
-            cursor.execute('SELECT id, scan_count FROM scans WHERE bssid = ? ORDER BY timestamp DESC LIMIT 1', (bssid,))
+
+            cursor.execute(
+                'SELECT id FROM scans WHERE bssid = ? ORDER BY timestamp DESC LIMIT 1',
+                (bssid,),
+            )
             existing = cursor.fetchone()
-            
+
             if existing:
-                # Update existing record
-                cursor.execute('''
-                    UPDATE scans 
-                    SET timestamp = ?, level = ?, distance = ?, risk_score = ?, 
-                        last_seen = ?, scan_count = scan_count + 1
+                cursor.execute(
+                    '''
+                    UPDATE scans
+                    SET timestamp = ?, level = ?, distance = ?, risk_score = ?,
+                        last_seen = ?, scan_count = scan_count + 1,
+                        ssid = ?, capabilities = ?, frequency = ?, is_hidden = ?, is_open = ?
                     WHERE bssid = ?
-                ''', (current_time, level, distance, risk_score, current_time, bssid))
+                    ''',
+                    (current_time, level, distance, risk_score, current_time, ssid, capabilities, frequency, is_hidden, is_open, bssid),
+                )
             else:
-                # Insert new record
-                cursor.execute('''
-                    INSERT INTO scans (bssid, ssid, capabilities, frequency, level, 
-                                    distance, risk_score, is_hidden, is_open, 
-                                    first_seen, last_seen, scan_count)
+                cursor.execute(
+                    '''
+                    INSERT INTO scans (bssid, ssid, capabilities, frequency, level,
+                                       distance, risk_score, is_hidden, is_open,
+                                       first_seen, last_seen, scan_count)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-                ''', (bssid, ssid, capabilities, frequency, level, distance, 
-                      risk_score, is_hidden, is_open, current_time, current_time))
-        
+                    ''',
+                    (bssid, ssid, capabilities, frequency, level, distance,
+                     risk_score, is_hidden, is_open, current_time, current_time),
+                )
+
         conn.commit()
         print(f'Processed {len(scan_data)} networks')
-        
-    except json.JSONDecodeError as e:
-        print(f'JSON decode error: {e}')
-    except Exception as e:
-        print(f'Error processing scan data: {e}')
+        return 0
+    except json.JSONDecodeError as exc:
+        print(f'JSON decode error: {exc}')
+        return 1
+    except Exception as exc:
+        print(f'Error processing scan data: {exc}')
+        return 1
     finally:
         conn.close()
 
-# Process the scan data
-process_scan_data('$scan_output')
-" || {
+
+if __name__ == '__main__':
+    if len(sys.argv) != 3:
+        print('Usage: python ingest.py <db_path> <payload_file>')
+        sys.exit(1)
+    sys.exit(process_scan_data(sys.argv[1], sys.argv[2]))
+PY
+    then
+        rm -f "$payload_file"
         log "${RED}Failed to process scan data${NC}"
         return 1
-    }
-    
+    fi
+
+    rm -f "$payload_file"
     log "${GREEN}Scan completed successfully${NC}"
     return 0
 }

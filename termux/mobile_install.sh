@@ -171,12 +171,19 @@ echo "📊 Demo interface: http://localhost:5000/demo"
 echo "Press Ctrl+C to stop"
 
 # Start the web server
-python server/app.py --host 0.0.0.0 --port 5000 &
+python -m server.app --host 0.0.0.0 --port 5000 > server.log 2>&1 &
 SERVER_PID=$!
 
 # Start the scanner
-./termux/radar_prototype.sh scan &
+./termux/radar_prototype.sh scan > scanner.log 2>&1 &
 SCANNER_PID=$!
+
+sleep 3
+if curl -sf http://127.0.0.1:5000/api/v1/health >/dev/null; then
+  echo "✅ Health endpoint reachable"
+else
+  echo "❌ Health endpoint unavailable, inspect server.log"
+fi
 
 # Wait for user interrupt
 trap 'kill $SERVER_PID $SCANNER_PID; echo "🛑 CIVOPS-Radar stopped"; exit 0' INT
@@ -194,7 +201,7 @@ cd /data/data/com.termux/files/home/radar
 
 echo "🚀 Quick Start CIVOPS-Radar"
 echo "1. Starting web server..."
-python server/app.py --host 0.0.0.0 --port 5000 &
+python -m server.app --host 0.0.0.0 --port 5000 > server.log 2>&1 &
 echo "2. Web interface ready at: http://localhost:5000"
 echo "3. Open browser and navigate to the URL above"
 echo "4. Press Ctrl+C to stop"
